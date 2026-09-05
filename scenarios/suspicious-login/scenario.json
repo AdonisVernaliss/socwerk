@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "id": "suspicious-login",
+    "version": 1,
+    "difficulty": "foundation",
+    "estimated_minutes": 35,
+    "title": {"en": "Suspicious Login Activity", "de": "Verdächtige Anmeldeaktivität"},
+    "description": {
+      "en": "Investigate failed authentication, VPN access, MFA decisions, and travel context to determine whether an identity was compromised.",
+      "de": "Untersuchen Sie fehlgeschlagene Anmeldungen, VPN-Zugriffe, MFA-Entscheidungen und Reisekontext, um eine mögliche Kontoübernahme zu bewerten."
+    },
+    "learning_objectives": [
+      {"en": "Correlate identity provider, VPN, and MFA telemetry.", "de": "Korrelieren Sie Telemetrie von Identitätsanbieter, VPN und MFA."},
+      {"en": "Distinguish credential abuse from approved unusual travel.", "de": "Unterscheiden Sie Zugangsdatenmissbrauch von genehmigten ungewöhnlichen Reisen."},
+      {"en": "Explain Valid Accounts and Brute Force detections.", "de": "Erklären Sie Erkennungen zu gültigen Konten und Brute Force."}
+    ]
+  },
+  "users": [
+    {"id": "usr-fin-104", "display_name": "Finance User 104", "department": "Finance", "role": "Analyst", "baseline": {"en": "Usually signs in from Berlin during 07:00–17:00 UTC using managed workstation WS-104.", "de": "Meldet sich gewöhnlich zwischen 07:00 und 17:00 UTC aus Berlin über den verwalteten Arbeitsplatz WS-104 an."}},
+    {"id": "usr-sales-207", "display_name": "Sales User 207", "department": "Sales", "role": "Account manager", "baseline": {"en": "Frequent approved international travel; uses VPN from managed laptop LT-207.", "de": "Häufige genehmigte Auslandsreisen; nutzt VPN über den verwalteten Laptop LT-207."}},
+    {"id": "svc-backup", "display_name": "Backup Service", "department": "IT Operations", "role": "Service identity", "baseline": {"en": "Automated authentication from the scheduled services network.", "de": "Automatisierte Anmeldung aus dem Netzwerk für geplante Dienste."}}
+  ],
+  "assets": [
+    {"id": "asset-ws-104", "hostname": "WS-104", "asset_type": "workstation", "owner_user_id": "usr-fin-104", "operating_system": "Windows 11", "criticality": "high"},
+    {"id": "asset-lt-207", "hostname": "LT-207", "asset_type": "workstation", "owner_user_id": "usr-sales-207", "operating_system": "Windows 11", "criticality": "medium"},
+    {"id": "asset-idp", "hostname": "IDP-EDGE", "asset_type": "identity", "owner_user_id": null, "operating_system": null, "criticality": "critical"},
+    {"id": "asset-vpn", "hostname": "VPN-GW-01", "asset_type": "network", "owner_user_id": null, "operating_system": null, "criticality": "critical"}
+  ],
+  "events": [
+    {
+      "id": "login-001",
+      "raw": {"eventType": "UserLogin", "created": "2026-02-17T07:52:11Z", "actor": "svc-backup", "client": {"ipAddress": "198.51.100.20"}, "outcome": {"result": "SUCCESS"}, "debugContext": {"requestId": "req-svc-44"}},
+      "normalized": {"timestamp": "2026-02-17T07:52:11Z", "source": "identity_provider", "event_type": "authentication", "severity": "informational", "summary": "Scheduled service authentication succeeded", "user_id": "svc-backup", "asset_id": "asset-idp", "source_ip": "198.51.100.20", "session_id": "req-svc-44", "outcome": "success", "attributes": {"authentication_method": "certificate", "network_zone": "services"}},
+      "related_event_ids": []
+    },
+    {
+      "id": "login-002",
+      "raw": {"EventID": 4624, "TimeCreated": "2026-02-17T08:02:04Z", "Computer": "WS-104", "SubjectUserName": "usr-fin-104", "LogonType": 2, "IpAddress": "-", "AuthenticationPackageName": "Negotiate"},
+      "normalized": {"timestamp": "2026-02-17T08:02:04Z", "source": "windows_security", "event_type": "authentication", "severity": "informational", "summary": "Interactive workstation logon succeeded", "user_id": "usr-fin-104", "asset_id": "asset-ws-104", "source_ip": "198.51.100.104", "session_id": "logon-8f10", "outcome": "success", "attributes": {"event_code": 4624, "logon_type": 2, "authentication_package": "Negotiate"}},
+      "related_event_ids": []
+    },
+    {
+      "id": "login-003",
+      "raw": {"eventType": "UserLogin", "created": "2026-02-17T18:41:03Z", "actor": "usr-fin-104", "client": {"ipAddress": "203.0.113.42", "geographicalContext": {"country": "NL"}}, "outcome": {"result": "FAILURE", "reason": "INVALID_CREDENTIALS"}, "debugContext": {"requestId": "req-901"}},
+      "normalized": {"timestamp": "2026-02-17T18:41:03Z", "source": "identity_provider", "event_type": "authentication", "severity": "low", "summary": "Identity sign-in failed: invalid credentials", "user_id": "usr-fin-104", "asset_id": "asset-idp", "source_ip": "203.0.113.42", "session_id": "req-901", "outcome": "failure", "mitre": ["T1110"], "attributes": {"country": "NL", "asn_type": "hosting", "failure_reason": "invalid_credentials", "failure_count": 1}},
+      "related_event_ids": ["login-004"]
+    },
+    {
+      "id": "login-004",
+      "raw": {"eventType": "UserLogin", "created": "2026-02-17T18:43:19Z", "actor": "usr-fin-104", "client": {"ipAddress": "203.0.113.42", "geographicalContext": {"country": "NL"}}, "outcome": {"result": "FAILURE", "reason": "INVALID_CREDENTIALS"}, "debugContext": {"requestId": "req-902", "failuresInWindow": 8}},
+      "normalized": {"timestamp": "2026-02-17T18:43:19Z", "source": "identity_provider", "event_type": "authentication", "severity": "medium", "summary": "Repeated identity sign-in failures in five-minute window", "user_id": "usr-fin-104", "asset_id": "asset-idp", "source_ip": "203.0.113.42", "session_id": "req-902", "outcome": "failure", "mitre": ["T1110"], "attributes": {"country": "NL", "asn_type": "hosting", "failure_reason": "invalid_credentials", "failure_count": 8}},
+      "related_event_ids": ["login-003", "login-005"]
+    },
+    {
+      "id": "login-005",
+      "raw": {"eventType": "UserLogin", "created": "2026-02-17T18:44:02Z", "actor": "usr-fin-104", "client": {"ipAddress": "203.0.113.42", "geographicalContext": {"country": "NL"}}, "outcome": {"result": "SUCCESS"}, "authenticationContext": {"credentialType": "password"}, "debugContext": {"requestId": "req-903"}},
+      "normalized": {"timestamp": "2026-02-17T18:44:02Z", "source": "identity_provider", "event_type": "authentication", "severity": "high", "summary": "Password sign-in succeeded after repeated failures", "user_id": "usr-fin-104", "asset_id": "asset-idp", "source_ip": "203.0.113.42", "session_id": "req-903", "outcome": "success", "mitre": ["T1078", "T1110"], "attributes": {"country": "NL", "asn_type": "hosting", "authentication_method": "password", "preceding_failures": 8}},
+      "related_event_ids": ["login-004", "login-006"]
+    },
+    {
+      "id": "login-006",
+      "raw": {"timestamp": "2026-02-17T18:44:21Z", "event": "mfa.challenge", "user": "usr-fin-104", "request_id": "mfa-903", "factor": "push", "result": "approved", "origin_ip": "203.0.113.42", "device_trust": "unknown"},
+      "normalized": {"timestamp": "2026-02-17T18:44:21Z", "source": "mfa", "event_type": "mfa_challenge", "severity": "high", "summary": "Push MFA challenge approved from an unrecognized device", "user_id": "usr-fin-104", "asset_id": "asset-idp", "source_ip": "203.0.113.42", "session_id": "req-903", "outcome": "approved", "mitre": ["T1078"], "attributes": {"factor": "push", "device_trust": "unknown", "country": "NL"}},
+      "related_event_ids": ["login-005", "login-007"]
+    },
+    {
+      "id": "login-007",
+      "raw": "<134>Feb 17 18:44:29 VPN-GW-01 vpn[4811]: AUTH_SUCCESS user=usr-fin-104 src=203.0.113.42 assigned=192.0.2.81 device=unmanaged session=vpn-c881",
+      "normalized": {"timestamp": "2026-02-17T18:44:29Z", "source": "vpn", "event_type": "vpn_login", "severity": "high", "summary": "VPN connection established from hosting provider address", "user_id": "usr-fin-104", "asset_id": "asset-vpn", "source_ip": "203.0.113.42", "destination_ip": "192.0.2.81", "session_id": "vpn-c881", "outcome": "success", "mitre": ["T1078"], "attributes": {"country": "NL", "asn_type": "hosting", "managed_device": false, "client_version": "7.4.1"}},
+      "related_event_ids": ["login-006", "login-008"]
+    },
+    {
+      "id": "login-008",
+      "raw": {"eventType": "ApplicationAccess", "created": "2026-02-17T18:47:12Z", "actor": "usr-fin-104", "client": {"ipAddress": "203.0.113.42"}, "target": {"displayName": "Finance Documents"}, "outcome": {"result": "SUCCESS"}, "debugContext": {"requestId": "req-906"}},
+      "normalized": {"timestamp": "2026-02-17T18:47:12Z", "source": "identity_provider", "event_type": "application_access", "severity": "medium", "summary": "Finance document service accessed through new session", "user_id": "usr-fin-104", "asset_id": "asset-idp", "source_ip": "203.0.113.42", "session_id": "req-903", "outcome": "success", "mitre": ["T1078"], "attributes": {"application": "Finance Documents", "device_trust": "unknown"}},
+      "related_event_ids": ["login-007"]
+    },
+    {
+      "id": "login-009",
+      "raw": {"timestamp": "2026-02-17T19:02:02Z", "event": "mfa.challenge", "user": "usr-fin-104", "request_id": "mfa-921", "factor": "push", "result": "denied", "origin_ip": "203.0.113.42", "reason": "user_reported_fraud"},
+      "normalized": {"timestamp": "2026-02-17T19:02:02Z", "source": "mfa", "event_type": "mfa_challenge", "severity": "critical", "summary": "User denied MFA challenge and reported it as fraud", "user_id": "usr-fin-104", "asset_id": "asset-idp", "source_ip": "203.0.113.42", "session_id": "req-921", "outcome": "denied", "mitre": ["T1078"], "attributes": {"factor": "push", "reason": "user_reported_fraud", "device_trust": "unknown"}},
+      "related_event_ids": ["login-005", "login-010"]
+    },
+    {
+      "id": "login-010",
+      "raw": "<134>Feb 17 19:02:18 VPN-GW-01 vpn[4811]: SESSION_END user=usr-fin-104 src=203.0.113.42 session=vpn-c881 reason=policy bytes_out=1849203",
+      "normalized": {"timestamp": "2026-02-17T19:02:18Z", "source": "vpn", "event_type": "vpn_session_end", "severity": "medium", "summary": "VPN session terminated by identity risk policy", "user_id": "usr-fin-104", "asset_id": "asset-vpn", "source_ip": "203.0.113.42", "session_id": "vpn-c881", "bytes_out": 1849203, "outcome": "terminated", "attributes": {"reason": "identity_risk_policy"}},
+      "related_event_ids": ["login-009"]
+    },
+    {
+      "id": "login-011",
+      "raw": "<134>Feb 18 09:14:55 VPN-GW-01 vpn[4930]: AUTH_SUCCESS user=usr-sales-207 src=192.0.2.207 assigned=192.0.2.92 device=managed session=vpn-a207",
+      "normalized": {"timestamp": "2026-02-18T09:14:55Z", "source": "vpn", "event_type": "vpn_login", "severity": "medium", "summary": "VPN connection established from a new travel location", "user_id": "usr-sales-207", "asset_id": "asset-vpn", "source_ip": "192.0.2.207", "destination_ip": "192.0.2.92", "session_id": "vpn-a207", "outcome": "success", "mitre": ["T1078"], "attributes": {"country": "ES", "asn_type": "hosting", "managed_device": true, "travel_approved": true}},
+      "related_event_ids": ["login-012"]
+    },
+    {
+      "id": "login-012",
+      "raw": {"timestamp": "2026-02-18T09:15:03Z", "event": "mfa.challenge", "user": "usr-sales-207", "request_id": "mfa-a207", "factor": "security_key", "result": "approved", "origin_ip": "192.0.2.207", "device_trust": "managed"},
+      "normalized": {"timestamp": "2026-02-18T09:15:03Z", "source": "mfa", "event_type": "mfa_challenge", "severity": "informational", "summary": "Phishing-resistant MFA approved on managed travel device", "user_id": "usr-sales-207", "asset_id": "asset-idp", "source_ip": "192.0.2.207", "session_id": "vpn-a207", "outcome": "approved", "attributes": {"factor": "security_key", "device_trust": "managed", "travel_approved": true}},
+      "related_event_ids": ["login-011"]
+    }
+  ],
+  "detections": [
+    {
+      "id": "det-auth-failure-burst",
+      "title": {"en": "Authentication Failure Burst", "de": "Häufung fehlgeschlagener Anmeldungen"},
+      "description": {"en": "Identifies an identity event summarizing more than five password failures in a short window.", "de": "Erkennt ein Identitätsereignis mit mehr als fünf Kennwortfehlern in einem kurzen Zeitraum."},
+      "severity": "medium",
+      "mitre": ["T1110"],
+      "false_positive_context": {"en": "A stale password in an approved application may create a failure burst; confirm the source and subsequent outcome.", "de": "Ein veraltetes Kennwort in einer genehmigten Anwendung kann viele Fehler erzeugen; Quelle und Folgeereignisse prüfen."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "authentication"},
+        {"field": "attributes.failure_count", "operator": "greater_than", "value": 5}
+      ],
+      "sigma": "title: Authentication Failure Burst\nid: 64fe462a-f3ba-4aa8-92dd-1c7dcf551001\nstatus: experimental\nlogsource:\n  category: authentication\ndetection:\n  selection:\n    outcome: failure\n  timeframe: 5m\n  condition: selection | count(user_id) by source_ip > 5\nfalsepositives:\n  - Stale application credentials\nlevel: medium",
+      "expected_event_ids": ["login-004"]
+    },
+    {
+      "id": "det-hosting-vpn-success",
+      "title": {"en": "VPN Success from Hosting Network", "de": "Erfolgreiche VPN-Anmeldung aus Hosting-Netz"},
+      "description": {"en": "Flags successful VPN access from an address classified as a hosting provider.", "de": "Markiert erfolgreiche VPN-Zugriffe von einer als Hosting-Anbieter eingestuften Adresse."},
+      "severity": "high",
+      "mitre": ["T1078"],
+      "false_positive_context": {"en": "Corporate travel gateways and privacy services may use hosting ASNs. Managed-device and travel approval context are decisive.", "de": "Reise-Gateways und Datenschutzdienste können Hosting-ASNs verwenden. Gerätestatus und Reisegenehmigung sind entscheidend."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "vpn_login"},
+        {"field": "outcome", "operator": "equals", "value": "success"},
+        {"field": "attributes.asn_type", "operator": "equals", "value": "hosting"}
+      ],
+      "sigma": "title: VPN Success from Hosting Network\nid: 4d210a82-9c7b-4fd2-a3a6-657738e21002\nstatus: experimental\nlogsource:\n  product: vpn\ndetection:\n  selection:\n    event_type: vpn_login\n    outcome: success\n    asn_type: hosting\n  condition: selection\nfalsepositives:\n  - Approved travel gateway\nlevel: high",
+      "expected_event_ids": ["login-007", "login-011"]
+    },
+    {
+      "id": "det-mfa-fraud-report",
+      "title": {"en": "MFA Challenge Reported as Fraud", "de": "MFA-Anfrage als Betrug gemeldet"},
+      "description": {"en": "Detects an MFA denial explicitly reported by the user as fraudulent.", "de": "Erkennt eine MFA-Ablehnung, die vom Benutzer ausdrücklich als betrügerisch gemeldet wurde."},
+      "severity": "critical",
+      "mitre": ["T1078"],
+      "false_positive_context": {"en": "Accidental fraud selection is possible; validate with the user and surrounding sessions.", "de": "Eine versehentliche Betrugsmeldung ist möglich; mit dem Benutzer und den umgebenden Sitzungen abgleichen."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "mfa_challenge"},
+        {"field": "attributes.reason", "operator": "equals", "value": "user_reported_fraud"}
+      ],
+      "sigma": "title: MFA Challenge Reported as Fraud\nid: f73c5a12-00f5-48e9-a6cd-7dd718e21003\nstatus: stable\nlogsource:\n  product: mfa\ndetection:\n  selection:\n    event_type: mfa_challenge\n    reason: user_reported_fraud\n  condition: selection\nfalsepositives:\n  - Accidental user selection\nlevel: critical",
+      "expected_event_ids": ["login-009"]
+    }
+  ],
+  "containment_options": [
+    {"id": "revoke-identity-sessions", "label": {"en": "Revoke active identity sessions", "de": "Aktive Identitätssitzungen widerrufen"}, "description": {"en": "Simulate invalidating active SSO and VPN sessions for the affected identity.", "de": "Simuliert die Ungültigkeit aktiver SSO- und VPN-Sitzungen der betroffenen Identität."}},
+    {"id": "reset-credentials", "label": {"en": "Reset credentials and MFA", "de": "Zugangsdaten und MFA zurücksetzen"}, "description": {"en": "Simulate a controlled password and MFA re-enrollment workflow.", "de": "Simuliert einen kontrollierten Kennwort- und MFA-Neuregistrierungsprozess."}},
+    {"id": "block-source-ip", "label": {"en": "Block observed source IP", "de": "Beobachtete Quell-IP sperren"}, "description": {"en": "Simulate a temporary edge block; address reuse limits its long-term value.", "de": "Simuliert eine temporäre Edge-Sperre; Adresswiederverwendung begrenzt den langfristigen Nutzen."}},
+    {"id": "isolate-workstation", "label": {"en": "Isolate finance workstation", "de": "Finanz-Arbeitsplatz isolieren"}, "description": {"en": "Simulate endpoint isolation only if endpoint compromise evidence exists.", "de": "Simuliert eine Endpunktisolation nur bei Belegen für eine Endpunktkompromittierung."}}
+  ],
+  "expected_outcome": {
+    "classification": "confirmed_incident",
+    "severity": "high",
+    "affected_user_ids": ["usr-fin-104"],
+    "affected_asset_ids": ["asset-idp", "asset-vpn"],
+    "critical_event_ids": ["login-004", "login-005", "login-006", "login-007", "login-009"],
+    "mitre": ["T1078", "T1110"],
+    "containment_action_ids": ["revoke-identity-sessions", "reset-credentials"],
+    "false_positive_event_ids": ["login-011"],
+    "explanation": {"en": "The failure burst, successful password use, approval from an unknown device, VPN connection, and later fraud report form a coherent account-compromise sequence. The sales travel alert is benign after checking device and approval context.", "de": "Die Fehlerhäufung, erfolgreiche Kennwortnutzung, Freigabe von einem unbekannten Gerät, VPN-Verbindung und spätere Betrugsmeldung ergeben eine schlüssige Kontoübernahme. Der Reisealarm des Vertriebs ist nach Prüfung von Gerät und Genehmigung gutartig."},
+    "lessons": [
+      {"en": "A successful sign-in becomes meaningful when correlated with preceding failures and MFA context.", "de": "Eine erfolgreiche Anmeldung wird durch vorherige Fehler und MFA-Kontext aussagekräftig."},
+      {"en": "Location or ASN alone is not enough to classify an incident.", "de": "Standort oder ASN allein reichen nicht für eine Vorfallklassifizierung."}
+    ]
+  }
+}

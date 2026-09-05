@@ -1,0 +1,60 @@
+name: socwerk
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      SOCWERK_DATA_DIR: /app/scenarios
+      SOCWERK_DATABASE_PATH: /data/socwerk.db
+      SOCWERK_ALLOWED_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - socwerk-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      PUBLIC_API_URL: http://localhost:8000
+      HOST: 0.0.0.0
+      PORT: 5173
+    ports:
+      - "5173:5173"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5173/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  socwerk-data:

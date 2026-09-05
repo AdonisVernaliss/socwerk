@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "id": "suspicious-powershell",
+    "version": 1,
+    "difficulty": "intermediate",
+    "estimated_minutes": 50,
+    "title": {"en": "Suspicious PowerShell Execution", "de": "Verdächtige PowerShell-Ausführung"},
+    "description": {"en": "Reconstruct parent-child process activity, PowerShell operational logging, file access, and network metadata while separating approved administration from suspicious execution.", "de": "Rekonstruieren Sie Eltern-Kind-Prozesse, PowerShell-Betriebsprotokolle, Dateizugriffe und Netzwerkmetadaten und trennen Sie genehmigte Administration von verdächtiger Ausführung."},
+    "learning_objectives": [
+      {"en": "Use process identifiers to reconstruct an execution chain.", "de": "Nutzen Sie Prozesskennungen zur Rekonstruktion einer Ausführungskette."},
+      {"en": "Compare process creation with PowerShell script-block telemetry.", "de": "Vergleichen Sie Prozesserstellung mit PowerShell-ScriptBlock-Telemetrie."},
+      {"en": "Tune broad interpreter detections with parent, signer, and change context.", "de": "Optimieren Sie breite Interpreter-Erkennungen mit Elternprozess-, Signatur- und Änderungskontext."}
+    ]
+  },
+  "users": [
+    {"id": "usr-ops-402", "display_name": "Operations User 402", "department": "Operations", "role": "Planner", "baseline": {"en": "Uses Office applications on WS-402; does not administer endpoints.", "de": "Nutzt Office-Anwendungen auf WS-402 und administriert keine Endpunkte."}},
+    {"id": "usr-admin-050", "display_name": "Endpoint Admin 050", "department": "IT Operations", "role": "Endpoint administrator", "baseline": {"en": "Runs signed maintenance scripts from the management share during approved windows.", "de": "Führt während genehmigter Fenster signierte Wartungsskripte aus der Managementfreigabe aus."}}
+  ],
+  "assets": [
+    {"id": "asset-ws-402", "hostname": "WS-402", "asset_type": "workstation", "owner_user_id": "usr-ops-402", "operating_system": "Windows 11", "criticality": "high"},
+    {"id": "asset-mgmt-01", "hostname": "MGMT-01", "asset_type": "server", "owner_user_id": "usr-admin-050", "operating_system": "Windows Server 2025", "criticality": "critical"},
+    {"id": "asset-proxy-02", "hostname": "WEB-PROXY-02", "asset_type": "network", "owner_user_id": null, "operating_system": null, "criticality": "high"}
+  ],
+  "events": [
+    {
+      "id": "ps-001",
+      "raw": {"UtcTime": "2026-04-14 08:29:55.044", "EventID": 1, "Computer": "WS-402", "User": "usr-ops-402", "Image": "C:\\Program Files\\Office\\wordprocessor.exe", "ParentImage": "C:\\Windows\\explorer.exe", "CommandLine": "wordprocessor.exe C:\\Cases\\Schedule.docx", "ProcessId": 6220, "ParentProcessId": 1412},
+      "normalized": {"timestamp": "2026-04-14T08:29:55.044Z", "source": "sysmon", "event_type": "process_created", "severity": "informational", "summary": "User opened a scheduling document in the standard word processor", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "process_name": "wordprocessor.exe", "parent_process_name": "explorer.exe", "process_id": "6220", "parent_process_id": "1412", "outcome": "started", "attributes": {"command_line": "wordprocessor.exe C:\\Cases\\Schedule.docx", "signed": true}},
+      "related_event_ids": ["ps-002"]
+    },
+    {
+      "id": "ps-002",
+      "raw": {"TimeCreated": "2026-04-14T08:31:07Z", "Provider": "OfficeTelemetry", "EventID": 3002, "Computer": "WS-402", "User": "usr-ops-402", "Document": "Schedule.docx", "Action": "active_content_blocked", "Zone": "Internet"},
+      "normalized": {"timestamp": "2026-04-14T08:31:07Z", "source": "office", "event_type": "document_activity", "severity": "medium", "summary": "Office blocked active content in an Internet-zone document", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "process_name": "wordprocessor.exe", "process_id": "6220", "file_name": "Schedule.docx", "outcome": "blocked", "mitre": ["T1204.002"], "attributes": {"zone": "Internet", "action": "active_content_blocked", "protected_view": true}},
+      "related_event_ids": ["ps-001", "ps-003"]
+    },
+    {
+      "id": "ps-003",
+      "raw": {"UtcTime": "2026-04-14 08:31:19.221", "EventID": 1, "Computer": "WS-402", "User": "usr-ops-402", "Image": "C:\\Windows\\System32\\cmd.exe", "ParentImage": "C:\\Program Files\\Office\\wordprocessor.exe", "CommandLine": "cmd.exe /c [sanitized document action]", "ProcessId": 6351, "ParentProcessId": 6220},
+      "normalized": {"timestamp": "2026-04-14T08:31:19.221Z", "source": "sysmon", "event_type": "process_created", "severity": "high", "summary": "Office application spawned a command interpreter despite active-content warning", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "process_name": "cmd.exe", "parent_process_name": "wordprocessor.exe", "process_id": "6351", "parent_process_id": "6220", "outcome": "started", "mitre": ["T1204.002", "T1059.003"], "attributes": {"command_line": "cmd.exe /c [sanitized document action]", "signed": true}},
+      "related_event_ids": ["ps-002", "ps-004"]
+    },
+    {
+      "id": "ps-004",
+      "raw": {"UtcTime": "2026-04-14 08:31:19.406", "EventID": 1, "Computer": "WS-402", "User": "usr-ops-402", "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "ParentImage": "C:\\Windows\\System32\\cmd.exe", "CommandLine": "powershell.exe -NoProfile -EncodedCommand [SANITIZED]", "ProcessId": 6360, "ParentProcessId": 6351, "Hashes": "SHA256=SYSTEM_BINARY"},
+      "normalized": {"timestamp": "2026-04-14T08:31:19.406Z", "source": "sysmon", "event_type": "process_created", "severity": "high", "summary": "Command interpreter started PowerShell with encoded sanitized content", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "process_name": "powershell.exe", "parent_process_name": "cmd.exe", "process_id": "6360", "parent_process_id": "6351", "outcome": "started", "mitre": ["T1059.001"], "attributes": {"command_line": "powershell.exe -NoProfile -EncodedCommand [SANITIZED]", "execution_style": "encoded", "signed": true, "script_signed": false, "change_ticket": false}},
+      "related_event_ids": ["ps-003", "ps-005"]
+    },
+    {
+      "id": "ps-005",
+      "raw": {"TimeCreated": "2026-04-14T08:31:19.582Z", "Provider": "Microsoft-Windows-PowerShell", "EventID": 4104, "Computer": "WS-402", "User": "usr-ops-402", "ScriptBlockId": "sb-91f", "MessageNumber": 1, "MessageTotal": 1, "ScriptBlockText": "[SANITIZED: collects basic host and network configuration; no executable content retained]"},
+      "normalized": {"timestamp": "2026-04-14T08:31:19.582Z", "source": "powershell", "event_type": "script_block", "severity": "high", "summary": "PowerShell logged an obfuscated discovery-oriented script block", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "process_name": "powershell.exe", "process_id": "6360", "session_id": "sb-91f", "outcome": "executed", "mitre": ["T1059.001", "T1082"], "attributes": {"script_block_id": "sb-91f", "content": "[SANITIZED discovery routine]", "obfuscation": true, "discovery_terms": 4, "script_signed": false}},
+      "related_event_ids": ["ps-004", "ps-006"]
+    },
+    {
+      "id": "ps-006",
+      "raw": {"UtcTime": "2026-04-14 08:31:20.092", "EventID": 11, "Computer": "WS-402", "User": "usr-ops-402", "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "TargetFilename": "C:\\ProgramData\\Cache\\system-profile.txt", "CreationUtcTime": "2026-04-14 08:31:20.092"},
+      "normalized": {"timestamp": "2026-04-14T08:31:20.092Z", "source": "sysmon", "event_type": "file_created", "severity": "medium", "summary": "PowerShell wrote collected host information to a staging directory", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "process_name": "powershell.exe", "process_id": "6360", "file_name": "system-profile.txt", "outcome": "created", "mitre": ["T1082"], "attributes": {"directory": "C:\\ProgramData\\Cache", "size": 3410, "extension": ".txt"}},
+      "related_event_ids": ["ps-005", "ps-007"]
+    },
+    {
+      "id": "ps-007",
+      "raw": "2026-04-14T08:31:25Z uid=usr-ops-402 src=198.51.100.142 dst=203.0.113.140 method=GET host=content-sync.example uri=/api/bootstrap status=200 bytes_in=28744 user_agent=PowerShell/5.1 category=uncategorized",
+      "normalized": {"timestamp": "2026-04-14T08:31:25Z", "source": "proxy", "event_type": "http_request", "severity": "high", "summary": "PowerShell requested data from an uncategorized external service", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "source_ip": "198.51.100.142", "destination_ip": "203.0.113.140", "domain": "content-sync.example", "process_name": "powershell.exe", "process_id": "6360", "bytes_out": 422, "outcome": "allowed", "mitre": ["T1105"], "attributes": {"method": "GET", "path": "/api/bootstrap", "status": 200, "bytes_in": 28744, "user_agent": "PowerShell/5.1", "category": "uncategorized"}},
+      "related_event_ids": ["ps-006", "ps-008"]
+    },
+    {
+      "id": "ps-008",
+      "raw": {"UtcTime": "2026-04-14 08:31:25.118", "EventID": 3, "Computer": "WS-402", "User": "usr-ops-402", "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "SourceIp": "198.51.100.142", "DestinationIp": "203.0.113.140", "DestinationPort": 443, "Protocol": "tcp", "Initiated": true},
+      "normalized": {"timestamp": "2026-04-14T08:31:25.118Z", "source": "sysmon", "event_type": "network_connection", "severity": "high", "summary": "Suspicious PowerShell process initiated an external TLS connection", "user_id": "usr-ops-402", "asset_id": "asset-ws-402", "source_ip": "198.51.100.142", "destination_ip": "203.0.113.140", "domain": "content-sync.example", "process_name": "powershell.exe", "process_id": "6360", "outcome": "connected", "mitre": ["T1105"], "attributes": {"destination_port": 443, "protocol": "tcp", "initiated": true}},
+      "related_event_ids": ["ps-007"]
+    },
+    {
+      "id": "ps-009",
+      "raw": {"TimeCreated": "2026-04-14T09:00:00Z", "Provider": "ChangeControl", "Ticket": "chg-2041", "Asset": "MGMT-01", "Owner": "usr-admin-050", "WindowStart": "2026-04-14T09:00:00Z", "Description": "Endpoint inventory collection", "Status": "approved"},
+      "normalized": {"timestamp": "2026-04-14T09:00:00Z", "source": "change_control", "event_type": "change_window", "severity": "informational", "summary": "Approved endpoint inventory maintenance window began", "user_id": "usr-admin-050", "asset_id": "asset-mgmt-01", "session_id": "chg-2041", "outcome": "approved", "attributes": {"ticket": "chg-2041", "purpose": "endpoint_inventory", "approved": true}},
+      "related_event_ids": ["ps-010"]
+    },
+    {
+      "id": "ps-010",
+      "raw": {"UtcTime": "2026-04-14 09:02:14.020", "EventID": 1, "Computer": "MGMT-01", "User": "usr-admin-050", "Image": "C:\\Program Files\\PowerShell\\7\\pwsh.exe", "ParentImage": "C:\\Windows\\System32\\taskhostw.exe", "CommandLine": "pwsh.exe -File \\\\management.example\\scripts\\inventory-signed.ps1 -Ticket chg-2041", "ProcessId": 7122, "ParentProcessId": 1404},
+      "normalized": {"timestamp": "2026-04-14T09:02:14.020Z", "source": "sysmon", "event_type": "process_created", "severity": "medium", "summary": "PowerShell started an approved signed inventory script", "user_id": "usr-admin-050", "asset_id": "asset-mgmt-01", "process_name": "powershell.exe", "parent_process_name": "taskhostw.exe", "process_id": "7122", "parent_process_id": "1404", "session_id": "chg-2041", "outcome": "started", "mitre": ["T1059.001", "T1082"], "attributes": {"command_line": "pwsh.exe -File [management share]\\inventory-signed.ps1 -Ticket chg-2041", "execution_style": "script_file", "signed": true, "script_signed": true, "change_ticket": true}},
+      "related_event_ids": ["ps-009", "ps-011"]
+    },
+    {
+      "id": "ps-011",
+      "raw": {"TimeCreated": "2026-04-14T09:02:14.211Z", "Provider": "Microsoft-Windows-PowerShell", "EventID": 4104, "Computer": "MGMT-01", "User": "usr-admin-050", "ScriptBlockId": "sb-inventory", "MessageNumber": 1, "MessageTotal": 1, "ScriptBlockText": "[SANITIZED: signed inventory collection script]"},
+      "normalized": {"timestamp": "2026-04-14T09:02:14.211Z", "source": "powershell", "event_type": "script_block", "severity": "informational", "summary": "Signed inventory script collected approved host attributes", "user_id": "usr-admin-050", "asset_id": "asset-mgmt-01", "process_name": "powershell.exe", "process_id": "7122", "session_id": "chg-2041", "outcome": "executed", "mitre": ["T1082"], "attributes": {"script_block_id": "sb-inventory", "content": "[SANITIZED signed inventory routine]", "obfuscation": false, "discovery_terms": 3, "script_signed": true}},
+      "related_event_ids": ["ps-010", "ps-012"]
+    },
+    {
+      "id": "ps-012",
+      "raw": "2026-04-14T09:02:18Z uid=usr-admin-050 src=198.51.100.50 dst=192.0.2.30 method=POST host=inventory.example uri=/api/results status=204 bytes_out=6132 user_agent=PowerShell/7.5 category=business-use",
+      "normalized": {"timestamp": "2026-04-14T09:02:18Z", "source": "proxy", "event_type": "http_request", "severity": "informational", "summary": "Approved inventory results sent to the internal collection service", "user_id": "usr-admin-050", "asset_id": "asset-mgmt-01", "source_ip": "198.51.100.50", "destination_ip": "192.0.2.30", "domain": "inventory.example", "process_name": "powershell.exe", "process_id": "7122", "session_id": "chg-2041", "bytes_out": 6132, "outcome": "allowed", "attributes": {"method": "POST", "path": "/api/results", "status": 204, "user_agent": "PowerShell/7.5", "category": "business-use", "internal_service": true}},
+      "related_event_ids": ["ps-011"]
+    }
+  ],
+  "detections": [
+    {
+      "id": "det-powershell-process",
+      "title": {"en": "PowerShell Process Execution", "de": "PowerShell-Prozessausführung"},
+      "description": {"en": "A broad visibility rule that records PowerShell process starts for contextual triage.", "de": "Eine breite Sichtbarkeitsregel, die PowerShell-Prozessstarts für die kontextbezogene Triage erfasst."},
+      "severity": "medium",
+      "mitre": ["T1059.001"],
+      "false_positive_context": {"en": "PowerShell is standard administration tooling. Parent process, signed-script state, ticket, destination, and user role determine risk.", "de": "PowerShell ist ein Standardwerkzeug der Administration. Elternprozess, Skriptsignatur, Ticket, Ziel und Benutzerrolle bestimmen das Risiko."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "process_created"},
+        {"field": "process_name", "operator": "equals", "value": "powershell.exe"}
+      ],
+      "sigma": "title: PowerShell Process Execution\nid: bc33e5c6-2224-4377-8f0d-905b09440201\nstatus: test\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    Image|endswith:\n      - '\\\\powershell.exe'\n      - '\\\\pwsh.exe'\n  condition: selection\nfalsepositives:\n  - Administrative scripts\nlevel: medium",
+      "expected_event_ids": ["ps-004", "ps-010"]
+    },
+    {
+      "id": "det-obfuscated-script-block",
+      "title": {"en": "Obfuscated PowerShell Script Block", "de": "Verschleierter PowerShell-ScriptBlock"},
+      "description": {"en": "Detects PowerShell operational events marked as containing obfuscated content.", "de": "Erkennt PowerShell-Betriebsereignisse mit als verschleiert markiertem Inhalt."},
+      "severity": "high",
+      "mitre": ["T1059.001"],
+      "false_positive_context": {"en": "Commercial software may compress or generate scripts; correlate signer, parent process, and network behavior.", "de": "Kommerzielle Software kann Skripte komprimieren oder erzeugen; Signatur, Elternprozess und Netzwerkverhalten korrelieren."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "script_block"},
+        {"field": "attributes.obfuscation", "operator": "equals", "value": true}
+      ],
+      "sigma": "title: Obfuscated PowerShell Script Block\nid: 88c1ba0c-3274-45e3-853c-905b09440202\nstatus: experimental\nlogsource:\n  product: windows\n  service: powershell\ndetection:\n  selection:\n    EventID: 4104\n    Obfuscation: true\n  condition: selection\nfalsepositives:\n  - Generated vendor scripts\nlevel: high",
+      "expected_event_ids": ["ps-005"]
+    },
+    {
+      "id": "det-office-shell-child",
+      "title": {"en": "Office Application Spawned Command Shell", "de": "Office-Anwendung startete Kommando-Shell"},
+      "description": {"en": "Detects a command shell started directly by the synthetic office application.", "de": "Erkennt eine direkt von der synthetischen Office-Anwendung gestartete Kommando-Shell."},
+      "severity": "high",
+      "mitre": ["T1204.002", "T1059.003"],
+      "false_positive_context": {"en": "Legacy document automation can create this pattern, but it should be rare and documented.", "de": "Veraltete Dokumentautomatisierung kann dieses Muster erzeugen, sollte aber selten und dokumentiert sein."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "process_created"},
+        {"field": "parent_process_name", "operator": "equals", "value": "wordprocessor.exe"},
+        {"field": "process_name", "operator": "equals", "value": "cmd.exe"}
+      ],
+      "sigma": "title: Office Application Spawned Command Shell\nid: 4a114944-8b2f-4be6-aa16-905b09440203\nstatus: stable\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    ParentImage|endswith: '\\\\wordprocessor.exe'\n    Image|endswith: '\\\\cmd.exe'\n  condition: selection\nfalsepositives:\n  - Document workflow automation\nlevel: high",
+      "expected_event_ids": ["ps-003"]
+    }
+  ],
+  "containment_options": [
+    {"id": "isolate-ws-402", "label": {"en": "Isolate WS-402", "de": "WS-402 isolieren"}, "description": {"en": "Simulate endpoint network isolation while preserving collection.", "de": "Simuliert die Endpunkt-Netzwerkisolation unter Beibehaltung der Datenerfassung."}},
+    {"id": "preserve-endpoint", "label": {"en": "Preserve endpoint evidence", "de": "Endpunktbeweise sichern"}, "description": {"en": "Simulate retaining volatile telemetry and relevant files for analysis.", "de": "Simuliert die Sicherung flüchtiger Telemetrie und relevanter Dateien zur Analyse."}},
+    {"id": "block-content-domain", "label": {"en": "Block content service domain", "de": "Domain des Inhaltsdienstes sperren"}, "description": {"en": "Simulate a temporary block for content-sync.example.", "de": "Simuliert eine temporäre Sperre für content-sync.example."}},
+    {"id": "disable-powershell-globally", "label": {"en": "Disable PowerShell globally", "de": "PowerShell global deaktivieren"}, "description": {"en": "Disruptive broad action that would affect approved administration.", "de": "Störende breite Maßnahme, die genehmigte Administration beeinträchtigen würde."}}
+  ],
+  "expected_outcome": {
+    "classification": "confirmed_incident",
+    "severity": "high",
+    "affected_user_ids": ["usr-ops-402"],
+    "affected_asset_ids": ["asset-ws-402"],
+    "critical_event_ids": ["ps-002", "ps-003", "ps-004", "ps-005", "ps-006", "ps-007", "ps-008"],
+    "mitre": ["T1204.002", "T1059.003", "T1059.001", "T1082", "T1105"],
+    "containment_action_ids": ["isolate-ws-402", "preserve-endpoint", "block-content-domain"],
+    "false_positive_event_ids": ["ps-010"],
+    "explanation": {"en": "The document warning followed by Office-to-shell-to-PowerShell ancestry, obfuscated script block, staging file, and external connection is a coherent suspicious chain. The administrator event is a signed script tied to an approved change and internal destination.", "de": "Die Dokumentwarnung, gefolgt von der Prozesskette Office–Shell–PowerShell, dem verschleierten ScriptBlock, der Staging-Datei und der externen Verbindung, bildet eine schlüssige verdächtige Kette. Das Administratorereignis ist ein signiertes Skript mit genehmigter Änderung und internem Ziel."},
+    "lessons": [
+      {"en": "Interpreter name alone is weak; ancestry and operational logging provide the explanation.", "de": "Der Interpretername allein ist schwach; Prozessherkunft und Betriebsprotokolle liefern die Erklärung."},
+      {"en": "Change records and signing context prevent destructive over-response to legitimate administration.", "de": "Änderungsnachweise und Signaturkontext verhindern eine überzogene Reaktion auf legitime Administration."}
+    ]
+  }
+}

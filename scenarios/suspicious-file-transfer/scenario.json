@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "id": "suspicious-file-transfer",
+    "version": 1,
+    "difficulty": "intermediate",
+    "estimated_minutes": 45,
+    "title": {"en": "Suspicious File Transfer", "de": "Verdächtige Dateiübertragung"},
+    "description": {"en": "Assess file staging, DNS, endpoint network activity, proxy transfer volume, and approved cloud workflows to identify possible data exfiltration.", "de": "Bewerten Sie Datei-Staging, DNS, Endpunkt-Netzwerkaktivität, Proxy-Übertragungsvolumen und genehmigte Cloud-Abläufe, um eine mögliche Datenexfiltration zu erkennen."},
+    "learning_objectives": [
+      {"en": "Reconstruct a transfer from file activity and network metadata.", "de": "Rekonstruieren Sie eine Übertragung aus Datei- und Netzwerkmetadaten."},
+      {"en": "Use destination reputation, process, volume, and approval context together.", "de": "Nutzen Sie Zielreputation, Prozess, Volumen und Genehmigungskontext gemeinsam."},
+      {"en": "Choose proportionate containment while preserving evidence.", "de": "Wählen Sie verhältnismäßige Eindämmung unter Beweissicherung."}
+    ]
+  },
+  "users": [
+    {"id": "usr-eng-522", "display_name": "Engineering User 522", "department": "Engineering", "role": "Design engineer", "baseline": {"en": "Works with medium-size design archives on WS-522; approved sharing uses corp-share.example.", "de": "Arbeitet auf WS-522 mit mittelgroßen Designarchiven; genehmigte Freigaben nutzen corp-share.example."}},
+    {"id": "usr-media-205", "display_name": "Media User 205", "department": "Communications", "role": "Media producer", "baseline": {"en": "Regularly uploads large approved media packages to corp-share.example.", "de": "Lädt regelmäßig große genehmigte Medienpakete zu corp-share.example hoch."}}
+  ],
+  "assets": [
+    {"id": "asset-ws-522", "hostname": "WS-522", "asset_type": "workstation", "owner_user_id": "usr-eng-522", "operating_system": "Windows 11", "criticality": "high"},
+    {"id": "asset-ws-205", "hostname": "WS-205", "asset_type": "workstation", "owner_user_id": "usr-media-205", "operating_system": "macOS", "criticality": "medium"},
+    {"id": "asset-files-01", "hostname": "FILES-01", "asset_type": "server", "owner_user_id": null, "operating_system": "Windows Server 2025", "criticality": "critical"},
+    {"id": "asset-proxy-03", "hostname": "WEB-PROXY-03", "asset_type": "network", "owner_user_id": null, "operating_system": null, "criticality": "high"}
+  ],
+  "events": [
+    {
+      "id": "xfer-001",
+      "raw": {"TimeCreated": "2026-05-22T13:05:09Z", "Provider": "FileAudit", "EventID": 4663, "Computer": "FILES-01", "SubjectUserName": "usr-eng-522", "ObjectName": "D:\\Projects\\Orion\\design-notes.pdf", "AccessMask": "0x1", "ProcessName": "C:\\Windows\\explorer.exe"},
+      "normalized": {"timestamp": "2026-05-22T13:05:09Z", "source": "windows_security", "event_type": "file_accessed", "severity": "informational", "summary": "Engineering user read a design document from the project share", "user_id": "usr-eng-522", "asset_id": "asset-files-01", "source_ip": "198.51.100.152", "process_name": "explorer.exe", "file_name": "design-notes.pdf", "outcome": "read", "attributes": {"share": "Projects", "project": "Orion", "sensitivity": "internal"}},
+      "related_event_ids": ["xfer-002"]
+    },
+    {
+      "id": "xfer-002",
+      "raw": {"TimeCreated": "2026-05-22T13:06:31Z", "Provider": "FileAudit", "EventID": 4663, "Computer": "FILES-01", "SubjectUserName": "usr-eng-522", "ObjectName": "D:\\Projects\\Orion\\prototype-results.csv", "AccessMask": "0x1", "ProcessName": "C:\\Windows\\explorer.exe"},
+      "normalized": {"timestamp": "2026-05-22T13:06:31Z", "source": "windows_security", "event_type": "file_accessed", "severity": "low", "summary": "Engineering user read project results from the same share", "user_id": "usr-eng-522", "asset_id": "asset-files-01", "source_ip": "198.51.100.152", "process_name": "explorer.exe", "file_name": "prototype-results.csv", "outcome": "read", "attributes": {"share": "Projects", "project": "Orion", "sensitivity": "confidential"}},
+      "related_event_ids": ["xfer-001", "xfer-003"]
+    },
+    {
+      "id": "xfer-003",
+      "raw": {"UtcTime": "2026-05-22 13:09:17.890", "EventID": 11, "Computer": "WS-522", "User": "usr-eng-522", "Image": "C:\\Program Files\\ArchiveTool\\archiver.exe", "TargetFilename": "C:\\Users\\user\\AppData\\Local\\Temp\\orion-review.7z", "CreationUtcTime": "2026-05-22 13:09:17.890"},
+      "normalized": {"timestamp": "2026-05-22T13:09:17.890Z", "source": "sysmon", "event_type": "file_created", "severity": "medium", "summary": "Archive tool created a large project archive in a temporary directory", "user_id": "usr-eng-522", "asset_id": "asset-ws-522", "process_name": "archiver.exe", "process_id": "8441", "file_name": "orion-review.7z", "outcome": "created", "mitre": ["T1560.001"], "attributes": {"directory": "Temp", "extension": ".7z", "size": 486539264, "source_file_count": 37, "sensitivity": "mixed"}},
+      "related_event_ids": ["xfer-002", "xfer-004"]
+    },
+    {
+      "id": "xfer-004",
+      "raw": "2026-05-22T13:11:22.100Z client=198.51.100.152 query=dropzone-storage.example qtype=A answer=203.0.113.190 ttl=60 policy=allow first_seen=true",
+      "normalized": {"timestamp": "2026-05-22T13:11:22.100Z", "source": "dns", "event_type": "dns_query", "severity": "medium", "summary": "Engineering workstation resolved a first-seen file-sharing domain", "user_id": "usr-eng-522", "asset_id": "asset-ws-522", "source_ip": "198.51.100.152", "destination_ip": "203.0.113.190", "domain": "dropzone-storage.example", "outcome": "allowed", "mitre": ["T1567.002"], "attributes": {"query_type": "A", "answer_count": 1, "first_seen": true, "category": "newly-observed"}},
+      "related_event_ids": ["xfer-003", "xfer-005"]
+    },
+    {
+      "id": "xfer-005",
+      "raw": {"UtcTime": "2026-05-22 13:11:23.488", "EventID": 3, "Computer": "WS-522", "User": "usr-eng-522", "Image": "C:\\Program Files\\Browser\\browser.exe", "SourceIp": "198.51.100.152", "DestinationIp": "203.0.113.190", "DestinationPort": 443, "Protocol": "tcp", "Initiated": true},
+      "normalized": {"timestamp": "2026-05-22T13:11:23.488Z", "source": "sysmon", "event_type": "network_connection", "severity": "medium", "summary": "Browser opened a TLS connection to the first-seen sharing service", "user_id": "usr-eng-522", "asset_id": "asset-ws-522", "source_ip": "198.51.100.152", "destination_ip": "203.0.113.190", "domain": "dropzone-storage.example", "process_name": "browser.exe", "process_id": "8110", "session_id": "upload-771", "outcome": "connected", "mitre": ["T1567.002"], "attributes": {"destination_port": 443, "protocol": "tcp", "initiated": true}},
+      "related_event_ids": ["xfer-004", "xfer-006"]
+    },
+    {
+      "id": "xfer-006",
+      "raw": "2026-05-22T13:11:25Z cs=upload-771 user=usr-eng-522 src=198.51.100.152 dst=203.0.113.190 method=POST host=dropzone-storage.example uri=/upload status=201 bytes_out=486541201 duration_ms=184221 category=personal-storage tls_inspection=ok",
+      "normalized": {"timestamp": "2026-05-22T13:11:25Z", "source": "proxy", "event_type": "file_upload", "severity": "high", "summary": "Large archive uploaded to an unapproved external storage service", "user_id": "usr-eng-522", "asset_id": "asset-ws-522", "source_ip": "198.51.100.152", "destination_ip": "203.0.113.190", "domain": "dropzone-storage.example", "process_name": "browser.exe", "process_id": "8110", "session_id": "upload-771", "file_name": "orion-review.7z", "bytes_out": 486541201, "outcome": "allowed", "mitre": ["T1567.002"], "attributes": {"method": "POST", "path": "/upload", "status": 201, "category": "personal-storage", "approved_service": false, "duration_ms": 184221}},
+      "related_event_ids": ["xfer-003", "xfer-005", "xfer-007"]
+    },
+    {
+      "id": "xfer-007",
+      "raw": {"UtcTime": "2026-05-22 13:14:32.040", "EventID": 23, "Computer": "WS-522", "User": "usr-eng-522", "Image": "C:\\Program Files\\Browser\\browser.exe", "TargetFilename": "C:\\Users\\user\\AppData\\Local\\Temp\\orion-review.7z", "Archived": "false"},
+      "normalized": {"timestamp": "2026-05-22T13:14:32.040Z", "source": "sysmon", "event_type": "file_deleted", "severity": "high", "summary": "Staged archive was deleted shortly after external upload", "user_id": "usr-eng-522", "asset_id": "asset-ws-522", "process_name": "browser.exe", "process_id": "8110", "file_name": "orion-review.7z", "outcome": "deleted", "mitre": ["T1070.004"], "attributes": {"directory": "Temp", "size": 486539264, "recycle_bin": false}},
+      "related_event_ids": ["xfer-006"]
+    },
+    {
+      "id": "xfer-008",
+      "raw": {"timestamp": "2026-05-22T13:20:02Z", "provider": "dlp", "rule": "confidential-file-egress", "user": "usr-eng-522", "asset": "WS-522", "destination": "dropzone-storage.example", "action": "audit", "matched_labels": ["confidential"], "bytes": 486541201},
+      "normalized": {"timestamp": "2026-05-22T13:20:02Z", "source": "dlp", "event_type": "policy_match", "severity": "critical", "summary": "DLP correlated confidential project access with external transfer", "user_id": "usr-eng-522", "asset_id": "asset-ws-522", "destination_ip": "203.0.113.190", "domain": "dropzone-storage.example", "bytes_out": 486541201, "outcome": "audit_only", "mitre": ["T1567.002"], "attributes": {"rule": "confidential-file-egress", "matched_labels": ["confidential"], "control_mode": "audit", "approved_service": false}},
+      "related_event_ids": ["xfer-002", "xfer-006"]
+    },
+    {
+      "id": "xfer-009",
+      "raw": {"TimeCreated": "2026-05-22T14:00:00Z", "Provider": "ChangeControl", "Ticket": "chg-media-82", "Asset": "WS-205", "Owner": "usr-media-205", "WindowStart": "2026-05-22T14:00:00Z", "Description": "Quarterly media package upload", "Status": "approved"},
+      "normalized": {"timestamp": "2026-05-22T14:00:00Z", "source": "change_control", "event_type": "change_window", "severity": "informational", "summary": "Approved media package upload window began", "user_id": "usr-media-205", "asset_id": "asset-ws-205", "session_id": "chg-media-82", "outcome": "approved", "attributes": {"ticket": "chg-media-82", "purpose": "media_delivery", "approved": true, "approved_service": "corp-share.example"}},
+      "related_event_ids": ["xfer-010"]
+    },
+    {
+      "id": "xfer-010",
+      "raw": {"timestamp": "2026-05-22T14:03:41Z", "provider": "endpoint_file", "computer": "WS-205", "user": "usr-media-205", "action": "create", "path": "/SyntheticHome/Exports/campaign-master.zip", "process": "MediaExport", "size": 834220184, "label": "public-release"},
+      "normalized": {"timestamp": "2026-05-22T14:03:41Z", "source": "endpoint_file", "event_type": "file_created", "severity": "low", "summary": "Media export application created an approved release archive", "user_id": "usr-media-205", "asset_id": "asset-ws-205", "process_name": "MediaExport", "process_id": "991", "session_id": "chg-media-82", "file_name": "campaign-master.zip", "outcome": "created", "attributes": {"directory": "Exports", "extension": ".zip", "size": 834220184, "sensitivity": "public-release", "ticket": "chg-media-82"}},
+      "related_event_ids": ["xfer-009", "xfer-011"]
+    },
+    {
+      "id": "xfer-011",
+      "raw": "2026-05-22T14:05:10Z cs=upload-882 user=usr-media-205 src=198.51.100.205 dst=192.0.2.220 method=POST host=corp-share.example uri=/approved/upload status=201 bytes_out=834221881 duration_ms=201419 category=business-use tls_inspection=ok",
+      "normalized": {"timestamp": "2026-05-22T14:05:10Z", "source": "proxy", "event_type": "file_upload", "severity": "medium", "summary": "Large media archive uploaded to approved corporate sharing", "user_id": "usr-media-205", "asset_id": "asset-ws-205", "source_ip": "198.51.100.205", "destination_ip": "192.0.2.220", "domain": "corp-share.example", "process_name": "browser", "session_id": "chg-media-82", "file_name": "campaign-master.zip", "bytes_out": 834221881, "outcome": "allowed", "mitre": ["T1567.002"], "attributes": {"method": "POST", "path": "/approved/upload", "status": 201, "category": "business-use", "approved_service": true, "ticket": "chg-media-82"}},
+      "related_event_ids": ["xfer-010", "xfer-012"]
+    },
+    {
+      "id": "xfer-012",
+      "raw": {"timestamp": "2026-05-22T14:09:02Z", "provider": "dlp", "rule": "large-file-egress", "user": "usr-media-205", "asset": "WS-205", "destination": "corp-share.example", "action": "allow", "matched_labels": ["public-release"], "bytes": 834221881, "ticket": "chg-media-82"},
+      "normalized": {"timestamp": "2026-05-22T14:09:02Z", "source": "dlp", "event_type": "policy_match", "severity": "informational", "summary": "DLP allowed labeled public media transfer under approved change", "user_id": "usr-media-205", "asset_id": "asset-ws-205", "destination_ip": "192.0.2.220", "domain": "corp-share.example", "session_id": "chg-media-82", "bytes_out": 834221881, "outcome": "allowed", "attributes": {"rule": "large-file-egress", "matched_labels": ["public-release"], "ticket": "chg-media-82", "approved_service": true}},
+      "related_event_ids": ["xfer-011"]
+    }
+  ],
+  "detections": [
+    {
+      "id": "det-large-file-upload",
+      "title": {"en": "Large Outbound File Upload", "de": "Großer ausgehender Datei-Upload"},
+      "description": {"en": "Detects individual file uploads exceeding 100 MB, independent of destination approval.", "de": "Erkennt einzelne Datei-Uploads über 100 MB unabhängig von der Zielgenehmigung."},
+      "severity": "high",
+      "mitre": ["T1567.002"],
+      "false_positive_context": {"en": "Media, backup, and engineering workflows may legitimately transfer large files to approved services under documented changes.", "de": "Medien-, Backup- und Engineering-Abläufe können große Dateien legitim an genehmigte Dienste unter dokumentierten Änderungen übertragen."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "file_upload"},
+        {"field": "bytes_out", "operator": "greater_than", "value": 104857600}
+      ],
+      "sigma": "title: Large Outbound File Upload\nid: 526ab979-ff48-4277-987b-ac3003270301\nstatus: experimental\nlogsource:\n  category: proxy\ndetection:\n  selection:\n    event_type: file_upload\n    bytes_out|gt: 104857600\n  condition: selection\nfalsepositives:\n  - Approved media or backup transfer\nlevel: high",
+      "expected_event_ids": ["xfer-006", "xfer-011"]
+    },
+    {
+      "id": "det-unapproved-storage-upload",
+      "title": {"en": "Upload to Unapproved Storage", "de": "Upload zu nicht genehmigtem Speicher"},
+      "description": {"en": "Flags file uploads whose normalized destination context is not an approved service.", "de": "Markiert Datei-Uploads, deren normalisierter Zielkontext kein genehmigter Dienst ist."},
+      "severity": "high",
+      "mitre": ["T1567.002"],
+      "false_positive_context": {"en": "Recently approved services may not yet be reflected in policy metadata; confirm with service ownership.", "de": "Kürzlich genehmigte Dienste sind möglicherweise noch nicht in Richtlinienmetadaten enthalten; mit dem Diensteigentümer abgleichen."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "file_upload"},
+        {"field": "attributes.approved_service", "operator": "equals", "value": false}
+      ],
+      "sigma": "title: Upload to Unapproved Storage\nid: b8543f7f-c428-4984-9ff0-ac3003270302\nstatus: stable\nlogsource:\n  category: proxy\ndetection:\n  selection:\n    event_type: file_upload\n    approved_service: false\n  condition: selection\nfalsepositives:\n  - Newly approved service pending inventory update\nlevel: high",
+      "expected_event_ids": ["xfer-006"]
+    },
+    {
+      "id": "det-staging-file-deletion",
+      "title": {"en": "Large Staging File Deleted", "de": "Große Staging-Datei gelöscht"},
+      "description": {"en": "Detects deletion of a large temporary file outside the recycle bin.", "de": "Erkennt das Löschen einer großen temporären Datei außerhalb des Papierkorbs."},
+      "severity": "high",
+      "mitre": ["T1070.004"],
+      "false_positive_context": {"en": "Export tools often remove temporary packages after successful delivery; correlate with destination and workflow approval.", "de": "Exportwerkzeuge entfernen temporäre Pakete oft nach erfolgreicher Lieferung; mit Ziel und Ablaufgenehmigung korrelieren."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "file_deleted"},
+        {"field": "attributes.size", "operator": "greater_than", "value": 104857600},
+        {"field": "attributes.recycle_bin", "operator": "equals", "value": false}
+      ],
+      "sigma": "title: Large Staging File Deleted\nid: 6b8fc0aa-2e69-4b52-aabe-ac3003270303\nstatus: experimental\nlogsource:\n  category: file_delete\n  product: windows\ndetection:\n  selection:\n    TargetFilename|contains: '\\\\Temp\\\\'\n    FileSize|gt: 104857600\n  condition: selection\nfalsepositives:\n  - Approved export cleanup\nlevel: high",
+      "expected_event_ids": ["xfer-007"]
+    }
+  ],
+  "containment_options": [
+    {"id": "isolate-ws-522", "label": {"en": "Isolate WS-522", "de": "WS-522 isolieren"}, "description": {"en": "Simulate endpoint isolation to stop further transfer while retaining collection.", "de": "Simuliert die Endpunktisolation zur Unterbindung weiterer Übertragungen bei fortgesetzter Erfassung."}},
+    {"id": "suspend-sharing-session", "label": {"en": "Suspend external sharing session", "de": "Externe Freigabesitzung aussetzen"}, "description": {"en": "Simulate revoking the observed upload session and link.", "de": "Simuliert den Widerruf der beobachteten Upload-Sitzung und des Links."}},
+    {"id": "preserve-transfer-evidence", "label": {"en": "Preserve transfer evidence", "de": "Übertragungsbeweise sichern"}, "description": {"en": "Simulate preserving proxy, endpoint, DLP, and file audit records.", "de": "Simuliert die Sicherung von Proxy-, Endpunkt-, DLP- und Dateiaudit-Daten."}},
+    {"id": "block-corporate-share", "label": {"en": "Block corporate sharing", "de": "Unternehmensfreigabe sperren"}, "description": {"en": "Would disrupt the approved media workflow without addressing the observed unapproved destination.", "de": "Würde den genehmigten Medienablauf stören, ohne das beobachtete nicht genehmigte Ziel zu adressieren."}}
+  ],
+  "expected_outcome": {
+    "classification": "confirmed_incident",
+    "severity": "high",
+    "affected_user_ids": ["usr-eng-522"],
+    "affected_asset_ids": ["asset-ws-522", "asset-files-01"],
+    "critical_event_ids": ["xfer-002", "xfer-003", "xfer-004", "xfer-005", "xfer-006", "xfer-007", "xfer-008"],
+    "mitre": ["T1560.001", "T1567.002", "T1070.004"],
+    "containment_action_ids": ["isolate-ws-522", "suspend-sharing-session", "preserve-transfer-evidence"],
+    "false_positive_event_ids": ["xfer-011"],
+    "explanation": {"en": "Confidential project access, creation of a large temporary archive, first-seen storage resolution, unapproved upload, cleanup, and DLP correlation support likely exfiltration. The larger media transfer is benign because its label, destination, and change record align.", "de": "Der Zugriff auf vertrauliche Projektdaten, ein großes temporäres Archiv, die erstmalige Auflösung des Speicherziels, der nicht genehmigte Upload, die Bereinigung und DLP-Korrelation stützen eine wahrscheinliche Exfiltration. Die größere Medienübertragung ist aufgrund von Kennzeichnung, Ziel und Änderungsnachweis gutartig."},
+    "lessons": [
+      {"en": "Transfer size is a triage signal, not a verdict.", "de": "Übertragungsgröße ist ein Triage-Signal, kein Urteil."},
+      {"en": "File-access sensitivity and destination approval make network volume actionable.", "de": "Dateisensitivität und Zielgenehmigung machen Netzwerkvolumen handlungsrelevant."}
+    ]
+  }
+}

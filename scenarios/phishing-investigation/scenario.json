@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "metadata": {
+    "id": "phishing-investigation",
+    "version": 1,
+    "difficulty": "intermediate",
+    "estimated_minutes": 45,
+    "title": {"en": "Phishing Investigation", "de": "Phishing-Untersuchung"},
+    "description": {"en": "Trace suspicious email metadata through user interaction, DNS, proxy, and endpoint telemetry without relying on a pre-written attack narrative.", "de": "Verfolgen Sie verdächtige E-Mail-Metadaten über Benutzerinteraktion, DNS, Proxy und Endpunkt-Telemetrie, ohne sich auf eine vorgegebene Angriffserzählung zu verlassen."},
+    "learning_objectives": [
+      {"en": "Correlate an email delivery with endpoint and network activity.", "de": "Korrelieren Sie eine E-Mail-Zustellung mit Endpunkt- und Netzwerkaktivität."},
+      {"en": "Assess sender, reply-to, domain, and authentication metadata together.", "de": "Bewerten Sie Absender-, Reply-to-, Domain- und Authentifizierungsmetadaten gemeinsam."},
+      {"en": "Separate a sanctioned external campaign from a harmful lookalike message.", "de": "Trennen Sie eine genehmigte externe Kampagne von einer schädlichen Lookalike-Nachricht."}
+    ]
+  },
+  "users": [
+    {"id": "usr-proc-311", "display_name": "Procurement User 311", "department": "Procurement", "role": "Buyer", "baseline": {"en": "Receives supplier documents and works from WS-311 during business hours.", "de": "Erhält Lieferantendokumente und arbeitet während der Geschäftszeiten an WS-311."}},
+    {"id": "usr-hr-118", "display_name": "HR User 118", "department": "Human Resources", "role": "Coordinator", "baseline": {"en": "Participates in approved employee survey campaigns.", "de": "Nimmt an genehmigten Mitarbeiterbefragungen teil."}}
+  ],
+  "assets": [
+    {"id": "asset-ws-311", "hostname": "WS-311", "asset_type": "workstation", "owner_user_id": "usr-proc-311", "operating_system": "Windows 11", "criticality": "high"},
+    {"id": "asset-ws-118", "hostname": "WS-118", "asset_type": "workstation", "owner_user_id": "usr-hr-118", "operating_system": "Windows 11", "criticality": "medium"},
+    {"id": "asset-mail", "hostname": "MAIL-EDGE", "asset_type": "cloud", "owner_user_id": null, "operating_system": null, "criticality": "critical"},
+    {"id": "asset-proxy", "hostname": "WEB-PROXY", "asset_type": "network", "owner_user_id": null, "operating_system": null, "criticality": "high"}
+  ],
+  "events": [
+    {
+      "id": "phish-001",
+      "raw": {"timestamp": "2026-03-05T08:16:20Z", "message_id": "m-8101", "mail_from": "billing@supplier.example", "header_from": "billing@supplier.example", "reply_to": "billing@supplier.example", "recipient": "usr-proc-311", "subject": "February statement", "spf": "pass", "dkim": "pass", "dmarc": "pass", "attachments": ["statement.pdf"]},
+      "normalized": {"timestamp": "2026-03-05T08:16:20Z", "source": "email_gateway", "event_type": "email_delivered", "severity": "informational", "summary": "Routine supplier statement delivered", "user_id": "usr-proc-311", "asset_id": "asset-mail", "domain": "supplier.example", "outcome": "delivered", "attributes": {"message_id": "m-8101", "subject": "February statement", "spf": "pass", "dkim": "pass", "dmarc": "pass", "reply_to_mismatch": false, "attachment": "statement.pdf"}},
+      "related_event_ids": []
+    },
+    {
+      "id": "phish-002",
+      "raw": {"timestamp": "2026-03-05T09:07:44Z", "message_id": "m-8244", "mail_from": "dispatch@mailer.example", "header_from": "Accounts <accounts@supplier-notices.example>", "reply_to": "case-551@mailer.example", "recipient": "usr-proc-311", "subject": "Updated remittance details", "spf": "pass", "dkim": "none", "dmarc": "fail", "urls": ["https://supplier-notices.example/document/551"], "attachments": []},
+      "normalized": {"timestamp": "2026-03-05T09:07:44Z", "source": "email_gateway", "event_type": "email_delivered", "severity": "medium", "summary": "Supplier-themed message delivered with authentication and reply-to anomalies", "user_id": "usr-proc-311", "asset_id": "asset-mail", "domain": "supplier-notices.example", "outcome": "delivered", "mitre": ["T1566.002"], "attributes": {"message_id": "m-8244", "subject": "Updated remittance details", "spf": "pass", "dkim": "none", "dmarc": "fail", "reply_to_mismatch": true, "display_name": "Accounts", "url_count": 1}},
+      "related_event_ids": ["phish-003"]
+    },
+    {
+      "id": "phish-003",
+      "raw": {"TimeCreated": "2026-03-05T09:11:02Z", "Provider": "BrowserEnterprise", "EventID": 1007, "User": "usr-proc-311", "Computer": "WS-311", "Action": "URL_NAVIGATION", "Url": "https://supplier-notices.example/document/551", "Referrer": "mailclient://m-8244"},
+      "normalized": {"timestamp": "2026-03-05T09:11:02Z", "source": "browser", "event_type": "link_opened", "severity": "medium", "summary": "User opened a link from the suspicious message", "user_id": "usr-proc-311", "asset_id": "asset-ws-311", "domain": "supplier-notices.example", "process_name": "browser.exe", "session_id": "web-551", "outcome": "opened", "mitre": ["T1204.001"], "attributes": {"message_id": "m-8244", "referrer_scheme": "mailclient", "path": "/document/551"}},
+      "related_event_ids": ["phish-002", "phish-004"]
+    },
+    {
+      "id": "phish-004",
+      "raw": "2026-03-05T09:11:02.188Z client=198.51.100.111 query=supplier-notices.example qtype=A answer=203.0.113.77 ttl=120 policy=allow",
+      "normalized": {"timestamp": "2026-03-05T09:11:02.188Z", "source": "dns", "event_type": "dns_query", "severity": "medium", "summary": "Workstation resolved a recently observed supplier lookalike domain", "user_id": "usr-proc-311", "asset_id": "asset-ws-311", "source_ip": "198.51.100.111", "destination_ip": "203.0.113.77", "domain": "supplier-notices.example", "session_id": "web-551", "outcome": "allowed", "mitre": ["T1204.001"], "attributes": {"query_type": "A", "answer_count": 1, "domain_age_days": 4, "first_seen": true}},
+      "related_event_ids": ["phish-003", "phish-005"]
+    },
+    {
+      "id": "phish-005",
+      "raw": "2026-03-05T09:11:03Z cs=web-551 user=usr-proc-311 src=198.51.100.111 dst=203.0.113.77 method=GET host=supplier-notices.example uri=/document/551 status=200 bytes_in=18421 category=uncategorized tls_sni=supplier-notices.example",
+      "normalized": {"timestamp": "2026-03-05T09:11:03Z", "source": "proxy", "event_type": "http_request", "severity": "high", "summary": "Browser downloaded content from a newly registered uncategorized domain", "user_id": "usr-proc-311", "asset_id": "asset-ws-311", "source_ip": "198.51.100.111", "destination_ip": "203.0.113.77", "domain": "supplier-notices.example", "process_name": "browser.exe", "session_id": "web-551", "outcome": "allowed", "mitre": ["T1105"], "attributes": {"method": "GET", "path": "/document/551", "status": 200, "bytes_in": 18421, "category": "uncategorized", "new_domain": true, "content_type": "application/zip"}},
+      "related_event_ids": ["phish-004", "phish-006"]
+    },
+    {
+      "id": "phish-006",
+      "raw": {"UtcTime": "2026-03-05 09:11:04.021", "EventID": 11, "Computer": "WS-311", "User": "usr-proc-311", "Image": "C:\\Program Files\\Browser\\browser.exe", "TargetFilename": "C:\\Users\\user\\Downloads\\Remittance_551.zip", "CreationUtcTime": "2026-03-05 09:11:04.021"},
+      "normalized": {"timestamp": "2026-03-05T09:11:04.021Z", "source": "sysmon", "event_type": "file_created", "severity": "medium", "summary": "Browser created a ZIP archive in the Downloads folder", "user_id": "usr-proc-311", "asset_id": "asset-ws-311", "process_name": "browser.exe", "process_id": "4812", "session_id": "web-551", "file_name": "Remittance_551.zip", "outcome": "created", "mitre": ["T1105"], "attributes": {"directory": "Downloads", "extension": ".zip", "size": 18421, "mark_of_the_web": true}},
+      "related_event_ids": ["phish-005", "phish-007"]
+    },
+    {
+      "id": "phish-007",
+      "raw": {"UtcTime": "2026-03-05 09:13:40.801", "EventID": 1, "Computer": "WS-311", "User": "usr-proc-311", "Image": "C:\\Windows\\System32\\documentviewer.exe", "ParentImage": "C:\\Program Files\\Browser\\browser.exe", "CommandLine": "documentviewer.exe [sanitized-document]", "ProcessId": 5092, "ParentProcessId": 4812, "Hashes": "SHA256=SANITIZED"},
+      "normalized": {"timestamp": "2026-03-05T09:13:40.801Z", "source": "sysmon", "event_type": "process_created", "severity": "high", "summary": "Downloaded content caused an unusual document handler to start from the browser", "user_id": "usr-proc-311", "asset_id": "asset-ws-311", "process_name": "documentviewer.exe", "parent_process_name": "browser.exe", "process_id": "5092", "parent_process_id": "4812", "outcome": "started", "mitre": ["T1204.002"], "attributes": {"command_line": "documentviewer.exe [sanitized-document]", "signed": true, "prevalence": "rare"}},
+      "related_event_ids": ["phish-006", "phish-008"]
+    },
+    {
+      "id": "phish-008",
+      "raw": {"UtcTime": "2026-03-05 09:14:07.090", "EventID": 3, "Computer": "WS-311", "User": "usr-proc-311", "Image": "C:\\Windows\\System32\\documentviewer.exe", "DestinationIp": "203.0.113.88", "DestinationPort": 443, "Protocol": "tcp", "Initiated": true},
+      "normalized": {"timestamp": "2026-03-05T09:14:07.090Z", "source": "sysmon", "event_type": "network_connection", "severity": "high", "summary": "Rare document handler initiated an external TLS connection", "user_id": "usr-proc-311", "asset_id": "asset-ws-311", "source_ip": "198.51.100.111", "destination_ip": "203.0.113.88", "domain": "content-relay.example", "process_name": "documentviewer.exe", "process_id": "5092", "outcome": "connected", "mitre": ["T1105"], "attributes": {"destination_port": 443, "protocol": "tcp", "initiated": true}},
+      "related_event_ids": ["phish-007", "phish-009"]
+    },
+    {
+      "id": "phish-009",
+      "raw": {"timestamp": "2026-03-05T09:24:31Z", "ticket_type": "security_report", "reporter": "usr-proc-311", "message_id": "m-8244", "category": "suspicious_email", "comment": "Unexpected request; link was opened before sender was checked"},
+      "normalized": {"timestamp": "2026-03-05T09:24:31Z", "source": "security_portal", "event_type": "user_report", "severity": "high", "summary": "User reported the supplier-themed message after opening its link", "user_id": "usr-proc-311", "asset_id": "asset-mail", "domain": "supplier-notices.example", "outcome": "reported", "attributes": {"message_id": "m-8244", "category": "suspicious_email", "link_opened": true}},
+      "related_event_ids": ["phish-002", "phish-008"]
+    },
+    {
+      "id": "phish-010",
+      "raw": {"timestamp": "2026-03-05T10:02:18Z", "message_id": "m-8319", "mail_from": "campaign@survey-provider.example", "header_from": "People Team <people@example.org>", "reply_to": "campaign@survey-provider.example", "recipient": "usr-hr-118", "subject": "Employee pulse survey", "spf": "pass", "dkim": "pass", "dmarc": "pass", "urls": ["https://survey-campaign.example/pulse"]},
+      "normalized": {"timestamp": "2026-03-05T10:02:18Z", "source": "email_gateway", "event_type": "email_delivered", "severity": "low", "summary": "Approved employee survey campaign delivered by an external provider", "user_id": "usr-hr-118", "asset_id": "asset-mail", "domain": "survey-campaign.example", "outcome": "delivered", "attributes": {"message_id": "m-8319", "subject": "Employee pulse survey", "spf": "pass", "dkim": "pass", "dmarc": "pass", "reply_to_mismatch": false, "campaign_approved": true}},
+      "related_event_ids": ["phish-011"]
+    },
+    {
+      "id": "phish-011",
+      "raw": "2026-03-05T10:04:51Z cs=web-883 user=usr-hr-118 src=198.51.100.118 dst=192.0.2.66 method=GET host=survey-campaign.example uri=/pulse status=200 bytes_in=9120 category=uncategorized tls_sni=survey-campaign.example",
+      "normalized": {"timestamp": "2026-03-05T10:04:51Z", "source": "proxy", "event_type": "http_request", "severity": "medium", "summary": "User opened an approved survey on a newly categorized external domain", "user_id": "usr-hr-118", "asset_id": "asset-ws-118", "source_ip": "198.51.100.118", "destination_ip": "192.0.2.66", "domain": "survey-campaign.example", "process_name": "browser.exe", "session_id": "web-883", "outcome": "allowed", "attributes": {"method": "GET", "path": "/pulse", "status": 200, "bytes_in": 9120, "category": "uncategorized", "new_domain": true, "campaign_approved": true, "content_type": "text/html"}},
+      "related_event_ids": ["phish-010", "phish-012"]
+    },
+    {
+      "id": "phish-012",
+      "raw": "2026-03-05T10:05:38Z cs=web-883 user=usr-hr-118 src=198.51.100.118 dst=192.0.2.66 method=POST host=survey-campaign.example uri=/response status=204 bytes_out=818 category=business-use",
+      "normalized": {"timestamp": "2026-03-05T10:05:38Z", "source": "proxy", "event_type": "http_request", "severity": "informational", "summary": "Small survey response submitted to approved campaign", "user_id": "usr-hr-118", "asset_id": "asset-ws-118", "source_ip": "198.51.100.118", "destination_ip": "192.0.2.66", "domain": "survey-campaign.example", "process_name": "browser.exe", "session_id": "web-883", "bytes_out": 818, "outcome": "allowed", "attributes": {"method": "POST", "path": "/response", "status": 204, "category": "business-use", "campaign_approved": true}},
+      "related_event_ids": ["phish-011"]
+    }
+  ],
+  "detections": [
+    {
+      "id": "det-email-auth-reply-anomaly",
+      "title": {"en": "Email Authentication and Reply-To Anomaly", "de": "Anomalie bei E-Mail-Authentifizierung und Reply-to"},
+      "description": {"en": "Flags delivered email with DMARC failure and a mismatched reply-to identity.", "de": "Markiert zugestellte E-Mails mit DMARC-Fehler und abweichender Reply-to-Identität."},
+      "severity": "medium",
+      "mitre": ["T1566.002"],
+      "false_positive_context": {"en": "Legitimate mailing services can alter envelope and reply-to fields; validate authentication alignment and campaign records.", "de": "Legitime Versanddienste können Envelope- und Reply-to-Felder ändern; Authentifizierungsausrichtung und Kampagnennachweise prüfen."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "email_delivered"},
+        {"field": "attributes.dmarc", "operator": "equals", "value": "fail"},
+        {"field": "attributes.reply_to_mismatch", "operator": "equals", "value": true}
+      ],
+      "sigma": "title: Email Authentication and Reply-To Anomaly\nid: 91cc1b56-dbd5-42e1-997f-4821af440101\nstatus: experimental\nlogsource:\n  category: email\ndetection:\n  selection:\n    event_type: email_delivered\n    dmarc: fail\n    reply_to_mismatch: true\n  condition: selection\nfalsepositives:\n  - Authorized third-party mailer\nlevel: medium",
+      "expected_event_ids": ["phish-002"]
+    },
+    {
+      "id": "det-new-domain-web-access",
+      "title": {"en": "Web Access to Newly Observed Domain", "de": "Webzugriff auf neu beobachtete Domain"},
+      "description": {"en": "Detects allowed HTTP activity to a domain marked new in local telemetry.", "de": "Erkennt zugelassene HTTP-Aktivität zu einer in der lokalen Telemetrie als neu markierten Domain."},
+      "severity": "high",
+      "mitre": ["T1105"],
+      "false_positive_context": {"en": "New SaaS and approved campaign domains are common; inspect content type, campaign approval, and preceding email.", "de": "Neue SaaS- und genehmigte Kampagnen-Domains sind häufig; Inhaltstyp, Genehmigung und vorherige E-Mail prüfen."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "http_request"},
+        {"field": "attributes.new_domain", "operator": "equals", "value": true}
+      ],
+      "sigma": "title: Web Access to Newly Observed Domain\nid: 2bc57e11-842a-45cd-860c-4821af440102\nstatus: experimental\nlogsource:\n  category: proxy\ndetection:\n  selection:\n    event_type: http_request\n    new_domain: true\n  condition: selection\nfalsepositives:\n  - Approved SaaS or marketing campaign\nlevel: high",
+      "expected_event_ids": ["phish-005", "phish-011"]
+    },
+    {
+      "id": "det-rare-browser-child",
+      "title": {"en": "Rare Process Spawned by Browser", "de": "Seltener vom Browser gestarteter Prozess"},
+      "description": {"en": "Flags a process with rare fleet prevalence that was launched from a browser.", "de": "Markiert einen seltenen Prozess, der von einem Browser gestartet wurde."},
+      "severity": "high",
+      "mitre": ["T1204.002"],
+      "false_positive_context": {"en": "Approved document viewers and protocol handlers may be rare after new software deployment.", "de": "Genehmigte Dokumentbetrachter und Protokollhandler können nach Softwareeinführung selten sein."},
+      "match": "all",
+      "conditions": [
+        {"field": "event_type", "operator": "equals", "value": "process_created"},
+        {"field": "parent_process_name", "operator": "equals", "value": "browser.exe"},
+        {"field": "attributes.prevalence", "operator": "equals", "value": "rare"}
+      ],
+      "sigma": "title: Rare Process Spawned by Browser\nid: c39a900e-e1bc-4300-9aba-4821af440103\nstatus: experimental\nlogsource:\n  category: process_creation\n  product: windows\ndetection:\n  selection:\n    ParentImage|endswith: '\\\\browser.exe'\n    Prevalence: rare\n  condition: selection\nfalsepositives:\n  - Newly deployed protocol handler\nlevel: high",
+      "expected_event_ids": ["phish-007"]
+    }
+  ],
+  "containment_options": [
+    {"id": "isolate-endpoint", "label": {"en": "Isolate affected endpoint", "de": "Betroffenen Endpunkt isolieren"}, "description": {"en": "Simulate network isolation of WS-311 while preserving telemetry.", "de": "Simuliert die Netzwerkisolation von WS-311 unter Erhalt der Telemetrie."}},
+    {"id": "quarantine-message", "label": {"en": "Quarantine related messages", "de": "Zugehörige Nachrichten quarantänisieren"}, "description": {"en": "Simulate removing matching messages from local mailboxes.", "de": "Simuliert das Entfernen übereinstimmender Nachrichten aus lokalen Postfächern."}},
+    {"id": "block-indicators", "label": {"en": "Block observed domains", "de": "Beobachtete Domains sperren"}, "description": {"en": "Simulate temporary controls for the lookalike and relay domains.", "de": "Simuliert temporäre Kontrollen für die Lookalike- und Relay-Domains."}},
+    {"id": "reset-all-users", "label": {"en": "Reset all user passwords", "de": "Alle Benutzerkennwörter zurücksetzen"}, "description": {"en": "Broad action without evidence of organization-wide credential impact.", "de": "Breite Maßnahme ohne Belege für organisationsweite Zugangsdaten-Auswirkungen."}}
+  ],
+  "expected_outcome": {
+    "classification": "confirmed_incident",
+    "severity": "high",
+    "affected_user_ids": ["usr-proc-311"],
+    "affected_asset_ids": ["asset-ws-311"],
+    "critical_event_ids": ["phish-002", "phish-003", "phish-005", "phish-006", "phish-007", "phish-008", "phish-009"],
+    "mitre": ["T1566.002", "T1204.001", "T1204.002", "T1105"],
+    "containment_action_ids": ["isolate-endpoint", "quarantine-message", "block-indicators"],
+    "false_positive_event_ids": ["phish-011"],
+    "explanation": {"en": "The mail authentication anomaly, link navigation, new-domain download, file creation, rare process start, and external connection establish a suspicious user-execution chain. The survey alert is supported by approval and clean mail authentication context.", "de": "Die E-Mail-Authentifizierungsanomalie, Linknavigation, der Download von einer neuen Domain, Dateierstellung, seltene Prozessstart und externe Verbindung belegen eine verdächtige Ausführungskette. Der Umfragealarm ist durch Genehmigung und saubere E-Mail-Authentifizierung erklärt."},
+    "lessons": [
+      {"en": "Email telemetry alone is often insufficient; endpoint and network pivots establish impact.", "de": "E-Mail-Telemetrie allein reicht oft nicht; Endpunkt- und Netzwerk-Pivots zeigen die Auswirkungen."},
+      {"en": "A generic new-domain alert needs business context before classification.", "de": "Ein generischer Alarm zu einer neuen Domain benötigt Geschäftskontext vor der Klassifizierung."}
+    ]
+  }
+}
