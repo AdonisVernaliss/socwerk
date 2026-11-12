@@ -6,6 +6,8 @@ SOCWerk is a compact local security operations environment for investigating syn
 
 It is an analyst workspace, not a quiz. Each scenario mixes suspicious and legitimate behavior across realistic defensive data sources. The analyst has to establish what happened, preserve evidence, test hypotheses, document findings, classify the incident, and recommend simulated containment.
 
+The latest stable release is tagged `v1.0.0`.
+
 ## Product tour
 
 ### Investigation overview
@@ -95,17 +97,14 @@ Investigation state is stored in the `socwerk-data` Docker volume. Stop the appl
 
 ## Local development
 
-Prerequisites:
-
-- Python 3.11 or newer
-- Node.js 20 or newer
+Use Python 3.13 and Node.js 22 to match CI and the Docker images. The backend package requires Python 3.11 or later.
 
 Install the backend and frontend dependencies:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e 'backend[dev]'
-cd frontend && npm install && cd ..
+cd frontend && npm ci && cd ..
 ```
 
 Run the API and web application in separate terminals:
@@ -158,13 +157,13 @@ Queries are parsed into in-memory predicates. They are never passed to SQL or an
 
 ## Testing and validation
 
-Run the same validation used by continuous integration:
+Run the local validation suite:
 
 ```bash
 make validate
 ```
 
-This performs backend formatting/lint checks and tests, frontend type checks/tests/build, scenario and detection integrity validation, repository privacy/sanity checks, and Docker Compose configuration validation.
+This runs backend formatting, linting, and tests, frontend type checks, tests, and build, scenario and repository integrity checks, and Docker Compose configuration validation. CI also builds the container images.
 
 Focused commands are also available:
 
